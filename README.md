@@ -1,16 +1,29 @@
 # grandjury
 
-Python client for the GrandJury ML evaluation and verdict analysis API.
+Get human feedback on your AI in 3 lines of Python.
 
-This package provides comprehensive access to the GrandJury server for ML model evaluation and voting analysis, supporting:
+```python
+from grandjury import GrandJury
 
-- **Model scoring** with decay-adjusted algorithms
-- **Vote analysis** across multiple dimensions (time, completeness, confidence)
-- **Multiple data formats** (pandas, polars, CSV, parquet, dict/list)
-- **Performance optimizations** with optional dependencies
-- **Backward compatibility** with existing code
+gj = GrandJury()  # reads GRANDJURY_API_KEY from env
+gj.trace(name="chat", input=prompt, output=response, model="gpt-4o")
+```
+
+Then open your Jupyter notebook:
+
+```python
+df = gj.results()  # traces with human votes — as a DataFrame
+print(f"Pass rate: {df['pass_rate'].mean():.1%}")
+```
 
 **Patent Pending.**
+
+## What is GrandJury?
+
+[HumanJudge](https://humanjudge.com) connects your AI to a community of human reviewers who evaluate your model's outputs. GrandJury is the Python SDK — it sends traces and retrieves human evaluation results.
+
+**Write path:** Log AI calls from your app → traces appear in your developer dashboard.
+**Read path:** Fetch evaluation results (votes, pass rates, reviewer feedback) into DataFrames for analysis.
 
 ## Installation
 
@@ -20,260 +33,153 @@ pip install grandjury
 
 Optional performance dependencies:
 ```bash
-pip install grandjury[performance]  # Installs msgspec, pyarrow, polars
+pip install grandjury[performance]  # msgspec, pyarrow, polars
 ```
 
 ## Quick Start
 
-### Basic Model Evaluation
-```python
-from grandjury import GrandJuryClient
+### 1. Register your model
 
-# Initialize client
-client = GrandJuryClient(api_key="your-api-key")
-
-# Evaluate model performance
-result = client.evaluate_model(
-    previous_score=0.7,
-    votes=[0.9, 0.8, 0.6],
-    reputations=[1.0, 1.0, 0.8]
-)
-print(f"Score: {result['score']:.4f}")
-```
-
-### Vote Analysis with Multiple Data Formats
-
-```python
-import pandas as pd
-import polars as pl
-
-# Your vote data
-vote_data = [
-    {
-        "inference_id": 1,
-        "vote": True,
-        "voter_id": 101,
-        "vote_time": "2024-07-07T19:22:30",
-        # ... other fields
-    }
-    # ... more votes
-]
-
-# No authentication needed for analysis endpoints  
-client = GrandJuryClient()
-
-# Use with different data formats
-histogram = client.vote_histogram(vote_data)  # dict/list
-histogram = client.vote_histogram(pd.DataFrame(vote_data))  # pandas
-histogram = client.vote_histogram(pl.DataFrame(vote_data))  # polars
-histogram = client.vote_histogram("votes.csv")  # CSV file
-histogram = client.vote_histogram("votes.parquet")  # Parquet file
-
-# Vote completeness analysis
-completeness = client.vote_completeness(
-    data=vote_data,
-    voter_list=[101, 102, 103]
-)
-
-# Population confidence
-confidence = client.population_confidence(
-    data=vote_data,
-    voter_list=[101, 102, 103]
-)
-
-# Majority vote analysis
-majority = client.majority_good_votes(
-    data=vote_data,
-    good_vote=True,
-    threshold=0.5
-)
-
-# Vote distribution per inference
-distribution = client.votes_distribution(vote_data)
-```
-
-### Backward Compatibility
-
-```python
-# Original function still works
-from grandjury import evaluate_model
-
-result = evaluate_model(
-    predictions=["Model output 1", "Model output 2"],
-    references=["Expected 1", "Expected 2"],
-    api_key="your-api-key"
-)
-```
-
-## API Endpoints
-
-| Method | Description | Authentication |
-|--------|-------------|----------------|
-| `evaluate_model()` | Model scoring with decay algorithms | Required |
-| `vote_histogram()` | Vote time distribution analysis | Optional |
-| `vote_completeness()` | Voting completeness metrics | Optional |
-| `population_confidence()` | Population confidence analysis | Optional |
-| `majority_good_votes()` | Majority vote counting | Optional |
-| `votes_distribution()` | Vote distribution per inference | Optional |
-
-## Performance Features
-
-The client automatically uses performance optimizations when available:
-
-- **msgspec**: Faster JSON serialization
-- **PyArrow**: Efficient Parquet file reading  
-- **Polars**: Native DataFrame support
-
-Install with: `pip install msgspec pyarrow polars`
-
-## Error Handling
-
-```python
-try:
-    result = client.vote_histogram(invalid_data)
-except Exception as e:
-    print(f"API Error: {e}")
-```
-
-## Server URL Configuration
-
-```python
-# Default: https://grandjury-server.onrender.com/api/v1
-client = GrandJuryClient()
-
-# Custom server
-client = GrandJuryClient(base_url="https://your-server.com")
-# Automatically appends /api/v1 if missing
-```
+Go to [humanjudge.com/projects/new](https://humanjudge.com/projects/new), register your AI, and copy the secret key.
 
 ```bash
-pip install grandjury
+export GRANDJURY_API_KEY=gj_sk_live_...
 ```
 
-Optional performance dependencies:
-```bash
-pip install grandjury[performance]  # Installs msgspec, pyarrow, polars
-```
-
-## Quick Start
-
-### Basic Model Evaluation
-```python
-from grandjury import GrandJuryClient
-
-# Initialize client
-client = GrandJuryClient(api_key="your-api-key")
-
-# Evaluate model performance
-result = client.evaluate_model(
-    previous_score=0.7,
-    votes=[0.9, 0.8, 0.6],
-    reputations=[1.0, 1.0, 0.8]
-)
-print(f"Score: {result['score']:.4f}")
-```
-
-### Vote Analysis with Multiple Data Formats
+### 2. Log traces from your app
 
 ```python
+from grandjury import GrandJury
+
+gj = GrandJury()  # zero-config — reads from env
+
+# Option A: Direct call
+gj.trace(name="chat", input="What is ML?", output="Machine learning is...", model="gpt-4o")
+
+# Option B: Decorator — auto-captures input/output/latency
+@gj.observe(name="chat", model="gpt-4o")
+def call_llm(prompt: str) -> str:
+    return openai.chat(prompt)
+
+# Option C: Context manager
+with gj.span("chat", input=prompt) as s:
+    response = call_llm(prompt)
+    s.set_output(response)
+```
+
+### 3. Get human evaluation results
+
+Once reviewers vote on your traces:
+
+```python
+# Trace-level summary
+df = gj.results()
+# trace_id | input | output | model | pass_count | flag_count | total_votes | pass_rate
+
+# Individual votes with reviewer identity
+df_votes = gj.results(detail='votes')
+# trace_id | voter_id | voter_name | verdict | flag_category | feedback | created_at
+
+# Filter by benchmark
+df_benchmark = gj.results(evaluation='marketing-benchmark')
+
+# Export
+df.to_parquet('evaluation_results.parquet')
+```
+
+### 4. Run analytics
+
+Works on both live platform data and offline datasets:
+
+```python
+# Auto-fetch from platform
+gj.analytics.vote_histogram()
+gj.analytics.population_confidence(voter_list=[...])
+
+# Or pass your own data
 import pandas as pd
-import polars as pl
+df = pd.read_csv("my_votes.csv")
+gj.analytics.vote_histogram(df)
+gj.analytics.votes_distribution(df)
+```
 
-# Your vote data
-vote_data = [
-    {
-        "inference_id": 1,
-        "vote": True,
-        "voter_id": 101,
-        "vote_time": "2024-07-07T19:22:30",
-        # ... other fields
+## Enroll in Benchmarks
+
+List and enroll your model in open benchmarks programmatically:
+
+```python
+# Browse available benchmarks
+benchmarks = gj.benchmarks.list()
+
+# Enroll with endpoint config
+gj.benchmarks.enroll(
+    benchmark_id="...",
+    model_id="...",
+    endpoint_config={
+        "endpoint": "https://api.myapp.com/v1/chat/completions",
+        "apiKey": "sk-...",
+        "request_template": '{"model":"gpt-4o","messages":[{"role":"user","content":"{{prompt}}"}]}',
+        "response_path": "choices[0].message.content"
     }
-    # ... more votes
-]
-
-# No authentication needed for analysis endpoints  
-client = GrandJuryClient()
-
-# Use with different data formats
-histogram = client.vote_histogram(vote_data)  # dict/list
-histogram = client.vote_histogram(pd.DataFrame(vote_data))  # pandas
-histogram = client.vote_histogram(pl.DataFrame(vote_data))  # polars
-histogram = client.vote_histogram("votes.csv")  # CSV file
-histogram = client.vote_histogram("votes.parquet")  # Parquet file
-
-# Vote completeness analysis
-completeness = client.vote_completeness(
-    data=vote_data,
-    voter_list=[101, 102, 103]
 )
-
-# Population confidence
-confidence = client.population_confidence(
-    data=vote_data,
-    voter_list=[101, 102, 103]
-)
-
-# Majority vote analysis
-majority = client.majority_good_votes(
-    data=vote_data,
-    good_vote=True,
-    threshold=0.5
-)
-
-# Vote distribution per inference
-distribution = client.votes_distribution(vote_data)
 ```
 
-### Backward Compatibility
+## Analytics Methods
+
+All analytics methods work on both platform data (`gj.results(detail='votes')`) and offline data (pandas/polars/CSV/parquet):
+
+| Method | Description |
+|---|---|
+| `gj.analytics.evaluate_model()` | Decay-adjusted scoring |
+| `gj.analytics.vote_histogram()` | Vote time distribution |
+| `gj.analytics.vote_completeness()` | Completeness per voter |
+| `gj.analytics.population_confidence()` | Confidence metrics |
+| `gj.analytics.majority_good_votes()` | Threshold analysis |
+| `gj.analytics.votes_distribution()` | Votes per inference |
+
+## Privacy
+
+- `gj.results()` only returns traces with at least 1 human vote (privacy gate)
+- Zero-vote traces are invisible to the SDK — only visible on the web dashboard
+- Reviewer identity is public (consistent with platform's public profile/leaderboard model)
+
+## API Reference
 
 ```python
-# Original function still works
-from grandjury import evaluate_model
-
-result = evaluate_model(
-    predictions=["Model output 1", "Model output 2"],
-    references=["Expected 1", "Expected 2"],
-    api_key="your-api-key"
+gj = GrandJury(
+    api_key=None,     # reads GRANDJURY_API_KEY from env if not provided
+    base_url="https://grandjury-server.onrender.com",
+    timeout=5.0,
 )
+
+# Write
+gj.trace(name, input, output, model, latency_ms, metadata, gj_inference_id)
+await gj.atrace(...)  # async version (requires httpx)
+gj.observe(name, model, metadata)  # decorator
+gj.span(name, input, model, metadata)  # context manager
+
+# Read
+gj.results(detail=None, evaluation=None)  # returns DataFrame or list[dict]
+
+# Browse
+gj.models.list()
+gj.models.get(model_id)
+gj.benchmarks.list()
+gj.benchmarks.enroll(benchmark_id, model_id, endpoint_config)
+
+# Analytics
+gj.analytics.evaluate_model(...)
+gj.analytics.vote_histogram(data=None, ...)
+gj.analytics.vote_completeness(data=None, voter_list=None, ...)
+gj.analytics.population_confidence(data=None, voter_list=None, ...)
+gj.analytics.majority_good_votes(data=None, ...)
+gj.analytics.votes_distribution(data=None, ...)
 ```
 
-## API Endpoints
+## Contributing
 
-| Method | Description | Authentication |
-|--------|-------------|----------------|
-| `evaluate_model()` | Model scoring with decay algorithms | Required |
-| `vote_histogram()` | Vote time distribution analysis | Optional |
-| `vote_completeness()` | Voting completeness metrics | Optional |
-| `population_confidence()` | Population confidence analysis | Optional |
-| `majority_good_votes()` | Majority vote counting | Optional |
-| `votes_distribution()` | Vote distribution per inference | Optional |
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, testing, and PR guidelines.
 
-## Performance Features
+## License
 
-The client automatically uses performance optimizations when available:
-
-- **msgspec**: Faster JSON serialization
-- **PyArrow**: Efficient Parquet file reading  
-- **Polars**: Native DataFrame support
-
-Install with: `pip install msgspec pyarrow polars`
-
-## Error Handling
-
-```python
-try:
-    result = client.vote_histogram(invalid_data)
-except Exception as e:
-    print(f"API Error: {e}")
-```
-
-## Server URL Configuration
-
-```python
-# Default: https://grandjury-server.onrender.com/api/v1
-client = GrandJuryClient()
-
-# Custom server
-client = GrandJuryClient(base_url="https://your-server.com")
-# Automatically appends /api/v1 if missing
-```
+See [LICENSE](LICENSE).

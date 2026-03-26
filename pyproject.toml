@@ -79,4 +79,5 @@ packages = ["grandjury"]
 dev = [
     "build>=1.2.2.post1",
     "twine>=6.1.0",
+    "pytest>=7.0.0",
 ]
