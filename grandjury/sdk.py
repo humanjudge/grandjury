@@ -6,7 +6,12 @@ Design principles:
 - Silent failure: all SDK exceptions caught, logged to stderr only.
 - model_id resolved server-side from API key (no project_id needed).
 - Decorator (@gj.observe) and context manager (gj.span()) supported.
-- Read path: gj.results() returns ResultSet with .to_pandas()/.to_polars()/.to_parquet()/.to_csv()
+- Resource-oriented read path:
+    gj.leaderboard("arena-id")              → public aggregates
+    gj.model("slug").votes()                → developer's model votes
+    gj.model("slug").traces()               → developer's model traces
+    gj.arena("id").votes()                  → premium: all models
+    gj.arena("id").leaderboard()            → same as gj.leaderboard()
 """
 
 import functools
@@ -65,6 +70,256 @@ class Span:
         self._metadata.update(kwargs)
 
 
+# ── Resource objects ──────────────────────────────────────────────────────────
+
+
+class ModelResource:
+    """
+    Resource object for a specific model.
+
+    Usage:
+        gj.model("my-slug").votes()
+        gj.model("my-slug").votes(arena="eval-id")
+        gj.model("my-slug").traces()
+    """
+
+    def __init__(self, client: "GrandJury", model: str):
+        self._client = client
+        self._model = model
+
+    def _resolve_id(self) -> Optional[str]:
+        return self._client._resolve_model_id(self._model)
+
+    def votes(
+        self,
+        arena: Optional[str] = None,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        limit: int = 1000,
+        offset: int = 0,
+    ) -> ResultSet:
+        """
+        Vote-level data for this model.
+
+        Args:
+            arena: optional evaluation/benchmark ID to filter
+            from_date: ISO date string (e.g. '2026-03-01')
+            to_date: ISO date string (e.g. '2026-03-27')
+            limit: max results (default 1000)
+            offset: pagination offset
+
+        Returns:
+            ResultSet with .to_pandas(), .to_polars(), .to_parquet(), .to_csv()
+        """
+        self._client._require_auth()
+        model_id = self._resolve_id()
+        if not model_id:
+            return ResultSet([])
+
+        try:
+            import requests
+            params = {"detail": "votes"}
+            if arena:
+                params["evaluation_id"] = arena
+            if from_date:
+                params["from_date"] = from_date
+            if to_date:
+                params["to_date"] = to_date
+
+            resp = requests.get(
+                f"{self._client._base_url}/api/v1/models/{model_id}/evaluations",
+                params=params,
+                headers={"Authorization": f"Bearer {self._client._auth_key}"},
+                timeout=self._client._timeout,
+            )
+            resp.raise_for_status()
+            return ResultSet(resp.json())
+        except Exception as exc:
+            logger.debug("GrandJury: model.votes error: %s", exc)
+            print(f"[grandjury] model.votes error: {exc}", file=sys.stderr)
+            return ResultSet([])
+
+    def traces(
+        self,
+        arena: Optional[str] = None,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        limit: int = 1000,
+        offset: int = 0,
+    ) -> ResultSet:
+        """
+        Trace-level data with vote aggregates for this model.
+
+        Args:
+            arena: optional evaluation/benchmark ID to filter
+            from_date: ISO date string (e.g. '2026-03-01')
+            to_date: ISO date string (e.g. '2026-03-27')
+            limit: max results (default 1000)
+            offset: pagination offset
+
+        Returns:
+            ResultSet with .to_pandas(), .to_polars(), .to_parquet(), .to_csv()
+        """
+        self._client._require_auth()
+        model_id = self._resolve_id()
+        if not model_id:
+            return ResultSet([])
+
+        try:
+            import requests
+            params = {}
+            if arena:
+                params["evaluation_id"] = arena
+            if from_date:
+                params["from_date"] = from_date
+            if to_date:
+                params["to_date"] = to_date
+
+            resp = requests.get(
+                f"{self._client._base_url}/api/v1/models/{model_id}/evaluations",
+                params=params,
+                headers={"Authorization": f"Bearer {self._client._auth_key}"},
+                timeout=self._client._timeout,
+            )
+            resp.raise_for_status()
+            return ResultSet(resp.json())
+        except Exception as exc:
+            logger.debug("GrandJury: model.traces error: %s", exc)
+            print(f"[grandjury] model.traces error: {exc}", file=sys.stderr)
+            return ResultSet([])
+
+
+class ArenaResource:
+    """
+    Resource object for a specific arena/benchmark.
+
+    Usage:
+        gj.arena("eval-id").votes()                  # all models (premium)
+        gj.arena("eval-id").votes(model="slug")      # one model (premium)
+        gj.arena("eval-id").leaderboard()             # public aggregates
+    """
+
+    def __init__(self, client: "GrandJury", evaluation_id: str):
+        self._client = client
+        self._evaluation_id = evaluation_id
+
+    def leaderboard(self) -> ResultSet:
+        """
+        Public leaderboard — no auth required. Aggregate stats only.
+
+        Returns per-model: name, slug, emoji, total_votes, pass_rate.
+        """
+        try:
+            import requests
+            resp = requests.get(
+                f"{self._client._base_url}/api/v1/benchmarks/{self._evaluation_id}/leaderboard",
+                timeout=self._client._timeout,
+            )
+            resp.raise_for_status()
+            return ResultSet(resp.json())
+        except Exception as exc:
+            logger.debug("GrandJury: arena.leaderboard error: %s", exc)
+            print(f"[grandjury] arena.leaderboard error: {exc}", file=sys.stderr)
+            return ResultSet([])
+
+    def votes(
+        self,
+        model: Optional[str] = None,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        limit: int = 1000,
+        offset: int = 0,
+    ) -> ResultSet:
+        """
+        Premium: vote-level data across all models in this arena.
+
+        Requires PAT with premium_subscriber or admin role.
+
+        Args:
+            model: optional model slug to filter to one model
+            from_date: ISO date string (e.g. '2026-03-01')
+            to_date: ISO date string (e.g. '2026-03-27')
+            limit: max results (default 1000)
+            offset: pagination offset
+
+        Returns:
+            ResultSet with .to_pandas(), .to_polars(), .to_parquet(), .to_csv()
+        """
+        self._client._require_auth()
+        try:
+            import requests
+            params = {"detail": "votes", "limit": limit, "offset": offset}
+            if model:
+                params["model"] = model
+            if from_date:
+                params["from_date"] = from_date
+            if to_date:
+                params["to_date"] = to_date
+
+            resp = requests.get(
+                f"{self._client._base_url}/api/v1/benchmarks/{self._evaluation_id}/votes",
+                params=params,
+                headers={"Authorization": f"Bearer {self._client._auth_key}"},
+                timeout=self._client._timeout,
+            )
+            resp.raise_for_status()
+            return ResultSet(resp.json())
+        except Exception as exc:
+            logger.debug("GrandJury: arena.votes error: %s", exc)
+            print(f"[grandjury] arena.votes error: {exc}", file=sys.stderr)
+            return ResultSet([])
+
+    def traces(
+        self,
+        model: Optional[str] = None,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        limit: int = 1000,
+        offset: int = 0,
+    ) -> ResultSet:
+        """
+        Premium: trace-level aggregates across all models in this arena.
+
+        Requires PAT with premium_subscriber or admin role.
+
+        Args:
+            model: optional model slug to filter
+            from_date: ISO date string (e.g. '2026-03-01')
+            to_date: ISO date string (e.g. '2026-03-27')
+            limit: max results (default 1000)
+            offset: pagination offset
+
+        Returns:
+            ResultSet with .to_pandas(), .to_polars(), .to_parquet(), .to_csv()
+        """
+        self._client._require_auth()
+        try:
+            import requests
+            params = {"limit": limit, "offset": offset}
+            if model:
+                params["model"] = model
+            if from_date:
+                params["from_date"] = from_date
+            if to_date:
+                params["to_date"] = to_date
+
+            resp = requests.get(
+                f"{self._client._base_url}/api/v1/benchmarks/{self._evaluation_id}/votes",
+                params=params,
+                headers={"Authorization": f"Bearer {self._client._auth_key}"},
+                timeout=self._client._timeout,
+            )
+            resp.raise_for_status()
+            return ResultSet(resp.json())
+        except Exception as exc:
+            logger.debug("GrandJury: arena.traces error: %s", exc)
+            print(f"[grandjury] arena.traces error: {exc}", file=sys.stderr)
+            return ResultSet([])
+
+
+# ── Legacy namespaces (kept for backward compat) ─────────────────────────────
+
+
 class _ModelsNamespace:
     """gj.models.list() / gj.models.get(id)"""
 
@@ -103,7 +358,7 @@ class _ModelsNamespace:
 
 
 class _BenchmarksNamespace:
-    """gj.benchmarks.list() / gj.benchmarks.leaderboard(id)"""
+    """gj.benchmarks.list() / gj.benchmarks.leaderboard(id) — kept for backward compat"""
 
     def __init__(self, client: "GrandJury"):
         self._client = client
@@ -123,76 +378,9 @@ class _BenchmarksNamespace:
             logger.debug("GrandJury: benchmarks.list error: %s", exc)
             return []
 
-    def leaderboard(self, evaluation_id: str) -> "ResultSet":
-        """
-        Public leaderboard — no auth required. Aggregate stats only.
-
-        Returns per-model: name, slug, emoji, total_votes, pass_rate.
-        """
-        try:
-            import requests
-            resp = requests.get(
-                f"{self._client._base_url}/api/v1/benchmarks/{evaluation_id}/leaderboard",
-                timeout=self._client._timeout,
-            )
-            resp.raise_for_status()
-            return ResultSet(resp.json())
-        except Exception as exc:
-            logger.debug("GrandJury: benchmarks.leaderboard error: %s", exc)
-            return []
-
-    def votes(
-        self,
-        evaluation_id: str,
-        model: Optional[str] = None,
-        detail: str = "votes",
-        from_date: Optional[str] = None,
-        to_date: Optional[str] = None,
-        limit: int = 1000,
-        offset: int = 0,
-    ) -> "ResultSet":
-        """
-        Premium: vote-level data across all models in a benchmark.
-
-        Requires authentication (PAT) and premium_subscriber role.
-
-        Args:
-            evaluation_id: benchmark UUID
-            model: optional model slug to filter
-            detail: 'votes' for individual votes (default), None for trace-level aggregates
-            from_date: ISO date string (e.g. '2026-03-01')
-            to_date: ISO date string (e.g. '2026-03-27')
-            limit: max results (default 1000)
-            offset: pagination offset
-
-        Returns:
-            ResultSet with .to_pandas(), .to_polars(), .to_parquet(), .to_csv()
-        """
-        self._client._require_auth()
-        try:
-            import requests
-            params = {"limit": limit, "offset": offset}
-            if detail:
-                params["detail"] = detail
-            if model:
-                params["model"] = model
-            if from_date:
-                params["from_date"] = from_date
-            if to_date:
-                params["to_date"] = to_date
-
-            resp = requests.get(
-                f"{self._client._base_url}/api/v1/benchmarks/{evaluation_id}/votes",
-                params=params,
-                headers={"Authorization": f"Bearer {self._client._auth_key}"},
-                timeout=self._client._timeout,
-            )
-            resp.raise_for_status()
-            return ResultSet(resp.json())
-        except Exception as exc:
-            logger.debug("GrandJury: benchmarks.votes error: %s", exc)
-            print(f"[grandjury] benchmarks.votes error: {exc}", file=sys.stderr)
-            return ResultSet([])
+    def leaderboard(self, evaluation_id: str) -> ResultSet:
+        """Public leaderboard — no auth required."""
+        return self._client.arena(evaluation_id).leaderboard()
 
     def enroll(self, benchmark_id: str, model_id: str, endpoint_config: Optional[Dict] = None) -> Optional[Dict]:
         """Enroll a model in a benchmark."""
@@ -216,9 +404,8 @@ class _AnalyticsNamespace:
     gj.analytics.vote_histogram(...) / gj.analytics.population_confidence(...)
 
     Wraps GrandJuryClient methods. Works on both:
-    - Live platform data: gj.analytics.vote_histogram(gj.results(detail='votes'))
+    - Live platform data: gj.analytics.vote_histogram(gj.model("slug").votes())
     - Offline data: gj.analytics.vote_histogram(pd.read_csv("data.csv"))
-    - Auto-fetch: gj.analytics.vote_histogram() — fetches from platform automatically
     """
 
     def __init__(self, client: "GrandJury"):
@@ -234,7 +421,11 @@ class _AnalyticsNamespace:
     def _auto_fetch(self, data):
         """If data is None, auto-fetch from platform."""
         if data is None:
-            return self._client.results(detail='votes')
+            # Use first model's votes as default
+            models = self._client._resolve_models()
+            if models:
+                return self._client.model(models[0].get("slug", models[0]["id"])).votes()
+            return ResultSet([])
         return data
 
     def evaluate_model(self, previous_score: float = 0.0, previous_timestamp: str = None,
@@ -269,6 +460,9 @@ class _AnalyticsNamespace:
         return c.votes_distribution(data, inference_ids)
 
 
+# ── Main client ───────────────────────────────────────────────────────────────
+
+
 class GrandJury:
     """
     GrandJury SDK client.
@@ -277,20 +471,25 @@ class GrandJury:
     No project_id needed — model resolved server-side from API key.
 
     Usage:
-        from grandjury import GrandJury
-        gj = GrandJury()
+        from grandjury import GJClient
+        gj = GJClient()
+
+        # Public — no auth
+        gj.leaderboard("arena-id").to_pandas()
+
+        # Developer — PAT required
+        gj.model("my-slug").votes().to_pandas()
+        gj.model("my-slug").traces().to_pandas()
+
+        # Premium — PAT + premium_subscriber
+        gj.arena("arena-id").votes().to_pandas()
+        gj.arena("arena-id").votes(model="gpt-5").to_pandas()
 
         # Write traces
         gj.trace(name="chat", input=prompt, output=response, model="gpt-4o")
 
-        # Read results (traces with ≥1 vote only)
-        df = gj.results()
-        df = gj.results(detail='votes')
-        df = gj.results(evaluation='marketing-benchmark')
-
         # Analytics (works on live or offline data)
         gj.analytics.vote_histogram()
-        gj.analytics.population_confidence(voter_list=[...])
 
         # Browse
         gj.models.list()
@@ -316,7 +515,7 @@ class GrandJury:
         self._model_id: Optional[str] = None  # resolved lazily from API key
         self._models_cache: Optional[List[Dict[str, Any]]] = None
 
-        # Namespaces
+        # Namespaces (legacy, kept for backward compat)
         self.models = _ModelsNamespace(self)
         self.benchmarks = _BenchmarksNamespace(self)
         self.analytics = _AnalyticsNamespace(self)
@@ -379,7 +578,45 @@ class GrandJury:
                 print(f"  - {m.get('slug') or m['id']}: {m['name']}", file=sys.stderr)
         return None
 
-    # ── Read path ─────────────────────────────────────────────────────────────
+    # ── Resource accessors ────────────────────────────────────────────────────
+
+    def model(self, slug: str) -> ModelResource:
+        """
+        Access a model's data.
+
+        Args:
+            slug: model slug or ID
+
+        Usage:
+            gj.model("my-slug").votes()
+            gj.model("my-slug").traces()
+            gj.model("my-slug").votes(arena="eval-id")
+        """
+        return ModelResource(self, slug)
+
+    def arena(self, evaluation_id: str) -> ArenaResource:
+        """
+        Access an arena/benchmark's data.
+
+        Args:
+            evaluation_id: benchmark UUID
+
+        Usage:
+            gj.arena("id").leaderboard()        # public
+            gj.arena("id").votes()               # premium
+            gj.arena("id").votes(model="slug")   # premium, filtered
+        """
+        return ArenaResource(self, evaluation_id)
+
+    def leaderboard(self, evaluation_id: str) -> ResultSet:
+        """
+        Public leaderboard — no auth required. Aggregate stats only.
+
+        Shorthand for gj.arena(evaluation_id).leaderboard()
+        """
+        return self.arena(evaluation_id).leaderboard()
+
+    # ── Legacy read path (backward compat) ────────────────────────────────────
 
     def results(
         self,
@@ -393,111 +630,35 @@ class GrandJury:
         offset: int = 0,
     ) -> Any:
         """
-        Fetch evaluation results.
+        Legacy read path — kept for backward compatibility.
 
-        Two modes:
-        1. Per-model (developer): gj.results(model="my-model") — returns your model's traces/votes.
-        2. Per-arena (premium): gj.results(arena="eval-id") — returns all models' data in a benchmark.
-
-        Only traces with ≥1 vote are returned (privacy gate).
-
-        Args:
-            model: model slug or ID. Required for per-model mode.
-            detail: None for trace-level aggregates, 'votes' for individual votes with voter_id
-            evaluation: alias for arena — filter by evaluation/benchmark ID
-            arena: evaluation/benchmark ID — if provided without model, uses premium benchmark endpoint
-            from_date: ISO date string (e.g. '2026-03-01') — only traces created on or after this date
-            to_date: ISO date string (e.g. '2026-03-27') — only traces created on or before this date
-            limit: max results (default 1000)
-            offset: pagination offset
-
-        Returns:
-            ResultSet with .to_pandas(), .to_polars(), .to_parquet(), .to_csv(), .to_json()
+        Prefer:
+            gj.model("slug").votes()        — developer
+            gj.arena("id").votes()           — premium
+            gj.leaderboard("id")             — public
         """
         self._require_auth()
-
-        # arena= is an alias for evaluation=
         eval_id = arena or evaluation
 
-        # If arena/evaluation provided but no model → premium benchmark endpoint
         if eval_id and not model:
-            return self.benchmarks.votes(
-                evaluation_id=eval_id,
-                model=None,
-                detail=detail or "votes",
-                from_date=from_date,
-                to_date=to_date,
-                limit=limit,
-                offset=offset,
-            )
+            return self.arena(eval_id).votes(from_date=from_date, to_date=to_date, limit=limit, offset=offset)
 
-        # If arena + model → premium benchmark endpoint filtered by model
         if eval_id and model:
-            # Check if user owns this model — if so, use the per-model endpoint
-            model_id = self._resolve_model_id(model)
-            if model_id:
-                # User owns this model — use per-model endpoint with evaluation filter
-                try:
-                    import requests
-                    params = {"limit": limit, "offset": offset}
-                    if detail:
-                        params["detail"] = detail
-                    if eval_id:
-                        params["evaluation_id"] = eval_id
-                    if from_date:
-                        params["from_date"] = from_date
-                    if to_date:
-                        params["to_date"] = to_date
-                    resp = requests.get(
-                        f"{self._base_url}/api/v1/models/{model_id}/evaluations",
-                        params=params,
-                        headers={"Authorization": f"Bearer {self._auth_key}"},
-                        timeout=self._timeout,
-                    )
-                    if resp.status_code == 200:
-                        return ResultSet(resp.json())
-                except Exception:
-                    pass
-            # Fallback: try premium benchmark endpoint with model filter
-            return self.benchmarks.votes(
-                evaluation_id=eval_id,
-                model=model,
-                detail=detail or "votes",
-                from_date=from_date,
-                to_date=to_date,
-                limit=limit,
-                offset=offset,
-            )
+            return self.model(model).votes(arena=eval_id, from_date=from_date, to_date=to_date)
 
-        model_id = self._resolve_model_id(model)
-        if not model_id:
-            logger.debug("GrandJury: could not resolve model_id")
-            return ResultSet([])
+        if model:
+            if detail == "votes":
+                return self.model(model).votes(from_date=from_date, to_date=to_date)
+            return self.model(model).traces(from_date=from_date, to_date=to_date)
 
-        try:
-            import requests
-            params = {}
-            if detail:
-                params["detail"] = detail
-            if eval_id:
-                params["evaluation_id"] = eval_id
-            if from_date:
-                params["from_date"] = from_date
-            if to_date:
-                params["to_date"] = to_date
+        # No model specified — try auto-resolve
+        model_id = self._resolve_model_id()
+        if model_id:
+            if detail == "votes":
+                return self.model(model_id).votes(from_date=from_date, to_date=to_date)
+            return self.model(model_id).traces(from_date=from_date, to_date=to_date)
 
-            resp = requests.get(
-                f"{self._base_url}/api/v1/models/{model_id}/evaluations",
-                params=params,
-                headers={"Authorization": f"Bearer {self._auth_key}"},
-                timeout=self._timeout,
-            )
-            resp.raise_for_status()
-            return ResultSet(resp.json())
-        except Exception as exc:
-            logger.debug("GrandJury: results() error: %s", exc)
-            print(f"[grandjury] results error: {exc}", file=sys.stderr)
-            return ResultSet([])
+        return ResultSet([])
 
     # ── Core submit ───────────────────────────────────────────────────────────
 
