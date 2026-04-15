@@ -6,7 +6,7 @@ Design principles:
 - Silent failure: all SDK exceptions caught, logged to stderr only.
 - model_id resolved server-side from API key (no project_id needed).
 - Decorator (@gj.observe) and context manager (gj.span()) supported.
-- Read path: gj.results() returns evaluation data as DataFrame.
+- Read path: gj.results() returns ResultSet with .to_pandas()/.to_polars()/.to_parquet()/.to_csv()
 """
 
 import functools
@@ -17,6 +17,8 @@ import time
 import uuid
 from contextlib import contextmanager
 from typing import Any, Callable, Dict, Generator, List, Optional, Union
+
+from grandjury.result_set import ResultSet
 
 logger = logging.getLogger("grandjury")
 
@@ -74,8 +76,8 @@ class _ModelsNamespace:
         try:
             import requests
             resp = requests.get(
-                f"{self._client._base_url}/api/v1/models",
-                headers={"Authorization": f"Bearer {self._client._api_key}"},
+                f"{self._client._base_url}/api/v1/models/me",
+                headers={"Authorization": f"Bearer {self._client._auth_key}"},
                 timeout=self._client._timeout,
             )
             resp.raise_for_status()
@@ -90,7 +92,7 @@ class _ModelsNamespace:
             import requests
             resp = requests.get(
                 f"{self._client._base_url}/api/v1/models/{model_id}",
-                headers={"Authorization": f"Bearer {self._client._api_key}"},
+                headers={"Authorization": f"Bearer {self._client._auth_key}"},
                 timeout=self._client._timeout,
             )
             resp.raise_for_status()
@@ -101,7 +103,7 @@ class _ModelsNamespace:
 
 
 class _BenchmarksNamespace:
-    """gj.benchmarks.list() / gj.benchmarks.enroll(...)"""
+    """gj.benchmarks.list() / gj.benchmarks.leaderboard(id)"""
 
     def __init__(self, client: "GrandJury"):
         self._client = client
@@ -112,7 +114,7 @@ class _BenchmarksNamespace:
             import requests
             resp = requests.get(
                 f"{self._client._base_url}/api/v1/challenges",
-                headers={"Authorization": f"Bearer {self._client._api_key}"},
+                headers={"Authorization": f"Bearer {self._client._auth_key}"},
                 timeout=self._client._timeout,
             )
             resp.raise_for_status()
@@ -121,6 +123,77 @@ class _BenchmarksNamespace:
             logger.debug("GrandJury: benchmarks.list error: %s", exc)
             return []
 
+    def leaderboard(self, evaluation_id: str) -> "ResultSet":
+        """
+        Public leaderboard — no auth required. Aggregate stats only.
+
+        Returns per-model: name, slug, emoji, total_votes, pass_rate.
+        """
+        try:
+            import requests
+            resp = requests.get(
+                f"{self._client._base_url}/api/v1/benchmarks/{evaluation_id}/leaderboard",
+                timeout=self._client._timeout,
+            )
+            resp.raise_for_status()
+            return ResultSet(resp.json())
+        except Exception as exc:
+            logger.debug("GrandJury: benchmarks.leaderboard error: %s", exc)
+            return []
+
+    def votes(
+        self,
+        evaluation_id: str,
+        model: Optional[str] = None,
+        detail: str = "votes",
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        limit: int = 1000,
+        offset: int = 0,
+    ) -> "ResultSet":
+        """
+        Premium: vote-level data across all models in a benchmark.
+
+        Requires authentication (PAT) and premium_subscriber role.
+
+        Args:
+            evaluation_id: benchmark UUID
+            model: optional model slug to filter
+            detail: 'votes' for individual votes (default), None for trace-level aggregates
+            from_date: ISO date string (e.g. '2026-03-01')
+            to_date: ISO date string (e.g. '2026-03-27')
+            limit: max results (default 1000)
+            offset: pagination offset
+
+        Returns:
+            ResultSet with .to_pandas(), .to_polars(), .to_parquet(), .to_csv()
+        """
+        self._client._require_auth()
+        try:
+            import requests
+            params = {"limit": limit, "offset": offset}
+            if detail:
+                params["detail"] = detail
+            if model:
+                params["model"] = model
+            if from_date:
+                params["from_date"] = from_date
+            if to_date:
+                params["to_date"] = to_date
+
+            resp = requests.get(
+                f"{self._client._base_url}/api/v1/benchmarks/{evaluation_id}/votes",
+                params=params,
+                headers={"Authorization": f"Bearer {self._client._auth_key}"},
+                timeout=self._client._timeout,
+            )
+            resp.raise_for_status()
+            return ResultSet(resp.json())
+        except Exception as exc:
+            logger.debug("GrandJury: benchmarks.votes error: %s", exc)
+            print(f"[grandjury] benchmarks.votes error: {exc}", file=sys.stderr)
+            return ResultSet([])
+
     def enroll(self, benchmark_id: str, model_id: str, endpoint_config: Optional[Dict] = None) -> Optional[Dict]:
         """Enroll a model in a benchmark."""
         try:
@@ -128,7 +201,7 @@ class _BenchmarksNamespace:
             resp = requests.post(
                 f"{self._client._base_url}/api/v1/models/{model_id}/enroll/{benchmark_id}",
                 json={"endpoint_config": endpoint_config},
-                headers={"Authorization": f"Bearer {self._client._api_key}"},
+                headers={"Authorization": f"Bearer {self._client._auth_key}"},
                 timeout=self._client._timeout,
             )
             resp.raise_for_status()
@@ -227,90 +300,204 @@ class GrandJury:
     def __init__(
         self,
         api_key: Optional[str] = None,
+        token: Optional[str] = None,
         base_url: str = DEFAULT_BASE_URL,
         timeout: float = 5.0,
         # Legacy compat — ignored but accepted so old code doesn't break
         project_id: Optional[str] = None,
     ):
-        self._api_key = api_key or os.environ.get("GRANDJURY_API_KEY", "")
+        # PAT (gj_pat_*) takes priority via token= or GRANDJURY_TOKEN env var
+        # Model key (gj_sk_*) via api_key= or GRANDJURY_API_KEY env var
+        self._token = token or os.environ.get("GRANDJURY_TOKEN", "")
+        self._api_key = api_key or os.environ.get("GRANDJURY_API_KEY", "") if not self._token else ""
+        self._auth_key = self._token or self._api_key  # whichever is set
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
         self._model_id: Optional[str] = None  # resolved lazily from API key
-
-        if not self._api_key:
-            print("[grandjury] No API key found. Set GRANDJURY_API_KEY env var. SDK will no-op.", file=sys.stderr)
+        self._models_cache: Optional[List[Dict[str, Any]]] = None
 
         # Namespaces
         self.models = _ModelsNamespace(self)
         self.benchmarks = _BenchmarksNamespace(self)
         self.analytics = _AnalyticsNamespace(self)
 
-    def _resolve_model_id(self) -> Optional[str]:
-        """Lazily resolve model_id from API key by listing models."""
+    def _require_auth(self):
+        """Raise if no auth key is set."""
+        if not self._auth_key:
+            raise RuntimeError(
+                "Authentication required. Set GRANDJURY_TOKEN (recommended) or GRANDJURY_API_KEY.\n"
+                "Get your token at humanjudge.com/profile"
+            )
+
+    def _resolve_models(self) -> List[Dict[str, Any]]:
+        """Lazily resolve models from token via /models/me endpoint."""
+        self._require_auth()
+        if self._models_cache is not None:
+            return self._models_cache
+        try:
+            import requests
+            resp = requests.get(
+                f"{self._base_url}/api/v1/models/me",
+                headers={"Authorization": f"Bearer {self._auth_key}"},
+                timeout=self._timeout,
+            )
+            resp.raise_for_status()
+            self._models_cache = resp.json()
+        except Exception:
+            self._models_cache = []
+        return self._models_cache
+
+    def _resolve_model_id(self, model: Optional[str] = None) -> Optional[str]:
+        """
+        Resolve model_id.
+
+        - If model= is a UUID, use directly.
+        - If model= is a slug, look up from /models/me cache.
+        - If not provided and only one model, use that.
+        """
+        if model:
+            # UUID check
+            if len(model) == 36 and "-" in model:
+                return model
+            # Slug lookup
+            models = self._resolve_models()
+            for m in models:
+                if m.get("slug") == model or m.get("name") == model:
+                    return m["id"]
+            return model  # assume it's an ID
+        # No model specified — use single model if only one
         if self._model_id:
             return self._model_id
-        try:
-            models = self.models.list()
-            if models:
-                self._model_id = models[0]["id"]
-        except Exception:
-            pass
-        return self._model_id
+        models = self._resolve_models()
+        if len(models) == 1:
+            self._model_id = models[0]["id"]
+            return self._model_id
+        if len(models) > 1:
+            logger.debug("GrandJury: multiple models found. Specify model= parameter.")
+            print(f"[grandjury] You have {len(models)} models. Specify model= to choose one:", file=sys.stderr)
+            for m in models:
+                print(f"  - {m.get('slug') or m['id']}: {m['name']}", file=sys.stderr)
+        return None
 
     # ── Read path ─────────────────────────────────────────────────────────────
 
     def results(
         self,
+        model: Optional[str] = None,
         detail: Optional[str] = None,
         evaluation: Optional[str] = None,
+        arena: Optional[str] = None,
+        from_date: Optional[str] = None,
+        to_date: Optional[str] = None,
+        limit: int = 1000,
+        offset: int = 0,
     ) -> Any:
         """
-        Fetch evaluation results for your model.
+        Fetch evaluation results.
+
+        Two modes:
+        1. Per-model (developer): gj.results(model="my-model") — returns your model's traces/votes.
+        2. Per-arena (premium): gj.results(arena="eval-id") — returns all models' data in a benchmark.
 
         Only traces with ≥1 vote are returned (privacy gate).
 
         Args:
-            detail: None for trace-level aggregates, 'votes' for individual votes
-            evaluation: filter by evaluation slug or ID
+            model: model slug or ID. Required for per-model mode.
+            detail: None for trace-level aggregates, 'votes' for individual votes with voter_id
+            evaluation: alias for arena — filter by evaluation/benchmark ID
+            arena: evaluation/benchmark ID — if provided without model, uses premium benchmark endpoint
+            from_date: ISO date string (e.g. '2026-03-01') — only traces created on or after this date
+            to_date: ISO date string (e.g. '2026-03-27') — only traces created on or before this date
+            limit: max results (default 1000)
+            offset: pagination offset
 
         Returns:
-            pandas DataFrame if pandas installed, else list[dict]
+            ResultSet with .to_pandas(), .to_polars(), .to_parquet(), .to_csv(), .to_json()
         """
-        if not self._api_key:
-            return []
+        self._require_auth()
 
-        model_id = self._resolve_model_id()
+        # arena= is an alias for evaluation=
+        eval_id = arena or evaluation
+
+        # If arena/evaluation provided but no model → premium benchmark endpoint
+        if eval_id and not model:
+            return self.benchmarks.votes(
+                evaluation_id=eval_id,
+                model=None,
+                detail=detail or "votes",
+                from_date=from_date,
+                to_date=to_date,
+                limit=limit,
+                offset=offset,
+            )
+
+        # If arena + model → premium benchmark endpoint filtered by model
+        if eval_id and model:
+            # Check if user owns this model — if so, use the per-model endpoint
+            model_id = self._resolve_model_id(model)
+            if model_id:
+                # User owns this model — use per-model endpoint with evaluation filter
+                try:
+                    import requests
+                    params = {"limit": limit, "offset": offset}
+                    if detail:
+                        params["detail"] = detail
+                    if eval_id:
+                        params["evaluation_id"] = eval_id
+                    if from_date:
+                        params["from_date"] = from_date
+                    if to_date:
+                        params["to_date"] = to_date
+                    resp = requests.get(
+                        f"{self._base_url}/api/v1/models/{model_id}/evaluations",
+                        params=params,
+                        headers={"Authorization": f"Bearer {self._auth_key}"},
+                        timeout=self._timeout,
+                    )
+                    if resp.status_code == 200:
+                        return ResultSet(resp.json())
+                except Exception:
+                    pass
+            # Fallback: try premium benchmark endpoint with model filter
+            return self.benchmarks.votes(
+                evaluation_id=eval_id,
+                model=model,
+                detail=detail or "votes",
+                from_date=from_date,
+                to_date=to_date,
+                limit=limit,
+                offset=offset,
+            )
+
+        model_id = self._resolve_model_id(model)
         if not model_id:
-            logger.debug("GrandJury: could not resolve model_id from API key")
-            return []
+            logger.debug("GrandJury: could not resolve model_id")
+            return ResultSet([])
 
         try:
             import requests
             params = {}
             if detail:
                 params["detail"] = detail
-            if evaluation:
-                params["evaluation_id"] = evaluation
+            if eval_id:
+                params["evaluation_id"] = eval_id
+            if from_date:
+                params["from_date"] = from_date
+            if to_date:
+                params["to_date"] = to_date
 
             resp = requests.get(
                 f"{self._base_url}/api/v1/models/{model_id}/evaluations",
                 params=params,
-                headers={"Authorization": f"Bearer {self._api_key}"},
+                headers={"Authorization": f"Bearer {self._auth_key}"},
                 timeout=self._timeout,
             )
             resp.raise_for_status()
-            data = resp.json()
-
-            # Return as DataFrame if pandas available
-            try:
-                import pandas as pd
-                return pd.DataFrame(data)
-            except ImportError:
-                return data
+            return ResultSet(resp.json())
         except Exception as exc:
             logger.debug("GrandJury: results() error: %s", exc)
             print(f"[grandjury] results error: {exc}", file=sys.stderr)
-            return []
+            return ResultSet([])
 
     # ── Core submit ───────────────────────────────────────────────────────────
 
