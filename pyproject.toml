@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "grandjury"
-version = "2.0.0"
+version = "2.2.0"
 description = "GrandJury SDK — submit LLM traces for human evaluation + analytics client"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -80,4 +80,5 @@ dev = [
     "build>=1.2.2.post1",
     "twine>=6.1.0",
     "pytest>=7.0.0",
+    "pip>=24.0",
 ]
