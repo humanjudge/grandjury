@@ -31,6 +31,31 @@ logger = logging.getLogger("grandjury")
 DEFAULT_BASE_URL = "https://grandjury-server.onrender.com"
 
 
+def _handle_response_error(resp, context: str) -> None:
+    """Parse API error responses and raise with clear messages."""
+    if resp.status_code == 200:
+        return
+    try:
+        body = resp.json()
+        detail = body.get("detail", resp.text)
+    except Exception:
+        detail = resp.text
+
+    if resp.status_code == 403:
+        print(f"[grandjury] Access denied: {detail}", file=sys.stderr)
+        if "premium" in str(detail).lower():
+            print("[grandjury] This endpoint requires a premium subscription. Visit humanjudge.com/profile to upgrade.", file=sys.stderr)
+    elif resp.status_code == 401:
+        print(f"[grandjury] Authentication failed: {detail}", file=sys.stderr)
+        print("[grandjury] Check your GRANDJURY_TOKEN. Get one at humanjudge.com/profile", file=sys.stderr)
+    elif resp.status_code == 404:
+        print(f"[grandjury] Not found: {detail}", file=sys.stderr)
+    else:
+        print(f"[grandjury] {context} error ({resp.status_code}): {detail}", file=sys.stderr)
+
+    resp.raise_for_status()
+
+
 def _generate_inference_id() -> str:
     ts = int(time.time() * 1000)
     rand = uuid.uuid4().hex[:8]
@@ -132,11 +157,10 @@ class ModelResource:
                 headers={"Authorization": f"Bearer {self._client._auth_key}"},
                 timeout=self._client._timeout,
             )
-            resp.raise_for_status()
+            _handle_response_error(resp, "model.votes")
             return ResultSet(resp.json())
         except Exception as exc:
             logger.debug("GrandJury: model.votes error: %s", exc)
-            print(f"[grandjury] model.votes error: {exc}", file=sys.stderr)
             return ResultSet([])
 
     def traces(
@@ -181,11 +205,10 @@ class ModelResource:
                 headers={"Authorization": f"Bearer {self._client._auth_key}"},
                 timeout=self._client._timeout,
             )
-            resp.raise_for_status()
+            _handle_response_error(resp, "model.traces")
             return ResultSet(resp.json())
         except Exception as exc:
             logger.debug("GrandJury: model.traces error: %s", exc)
-            print(f"[grandjury] model.traces error: {exc}", file=sys.stderr)
             return ResultSet([])
 
 
@@ -215,11 +238,10 @@ class ArenaResource:
                 f"{self._client._base_url}/api/v1/benchmarks/{self._evaluation_id}/leaderboard",
                 timeout=self._client._timeout,
             )
-            resp.raise_for_status()
+            _handle_response_error(resp, "arena.leaderboard")
             return ResultSet(resp.json())
         except Exception as exc:
             logger.debug("GrandJury: arena.leaderboard error: %s", exc)
-            print(f"[grandjury] arena.leaderboard error: {exc}", file=sys.stderr)
             return ResultSet([])
 
     def votes(
@@ -262,11 +284,10 @@ class ArenaResource:
                 headers={"Authorization": f"Bearer {self._client._auth_key}"},
                 timeout=self._client._timeout,
             )
-            resp.raise_for_status()
+            _handle_response_error(resp, "arena.votes")
             return ResultSet(resp.json())
         except Exception as exc:
             logger.debug("GrandJury: arena.votes error: %s", exc)
-            print(f"[grandjury] arena.votes error: {exc}", file=sys.stderr)
             return ResultSet([])
 
     def traces(
@@ -309,7 +330,7 @@ class ArenaResource:
                 headers={"Authorization": f"Bearer {self._client._auth_key}"},
                 timeout=self._client._timeout,
             )
-            resp.raise_for_status()
+            _handle_response_error(resp, "arena.traces")
             return ResultSet(resp.json())
         except Exception as exc:
             logger.debug("GrandJury: arena.traces error: %s", exc)
