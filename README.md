@@ -1,8 +1,21 @@
+<div align="center">
+
 # grandjury
 
 > Real human evaluations of AI models. **25,000+ blind reviews** by **200+ verified reviewers** across **58 models** (GPT-5, Claude Opus 4.7, Gemini 3.1, Grok 4.3, DeepSeek V4, Mistral, Kimi K2.6 and more) and **44 benchmarks**. Free. Python SDK + MCP server + ChatGPT GPT + REST.
 
-[![PyPI](https://img.shields.io/pypi/v/grandjury.svg)](https://pypi.org/project/grandjury/) [![Docs](https://img.shields.io/badge/docs-humanjudge.com-blue)](https://humanjudge.com/docs) [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE) [![Built on](https://img.shields.io/badge/built_on-humanjudge.com-orange)](https://humanjudge.com)
+[![PyPI](https://img.shields.io/pypi/v/grandjury?style=flat-square&color=blue)](https://pypi.org/project/grandjury/)
+[![Python](https://img.shields.io/pypi/pyversions/grandjury?style=flat-square&color=blue)](https://pypi.org/project/grandjury/)
+[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-humanjudge.com-blue?style=flat-square)](https://humanjudge.com/docs)
+[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/vw43ufYmDH)
+[![Berkeley RDI](https://img.shields.io/badge/Berkeley_RDI-Aug_1--2_2026-003262?style=flat-square)](https://rdi.berkeley.edu/)
+
+**[Install the SDK ↓](#installation) · [Join the R&D community ↓](#research-community)**
+
+</div>
+
+---
 
 Get human feedback on your AI in 3 lines of Python:
 
@@ -205,6 +218,26 @@ gj.analytics.population_confidence(data=None, voter_list=None, ...)
 gj.analytics.majority_good_votes(data=None, ...)
 gj.analytics.votes_distribution(data=None, ...)
 ```
+
+## Research community
+
+We're building an open R&D community around **pluralistic evaluation for AI agents in production** — treating live evaluation as a datastream, not a fixed dataset. Anchored at the [Berkeley RDI Agentic AI Summit, Aug 1–2 2026](https://rdi.berkeley.edu/).
+
+The umbrella has six research streams — applied training methods, runtime model selection, public guardrails, signal vocabulary, public accountability artifacts, and UI integrations into the tools developers already use (Langfuse, n8n, Cursor, Slack, and more). Pick one by interest, not assignment.
+
+### Apply by opening a PR
+
+No CV, no "tell us about yourself." The PR is the application:
+
+1. Sign up at [humanjudge.com/for-developers](https://humanjudge.com/for-developers) (free)
+2. Open a PR to this repo improving the PAT-generation flow in the Python package
+3. Arthur reviews personally within ~3 business days
+4. After merge → Discord invite link in your inbox
+5. Pick a stream and start
+
+[Join Discord →](https://discord.gg/vw43ufYmDH)
+
+Stream-level conversations, research context, and active threads all live in Discord.
 
 ## Contributing
 
