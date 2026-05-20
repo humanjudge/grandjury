@@ -13,16 +13,18 @@
 ## Streams of interest
 
 <!--
-  For each stream that interests you, write 2-4 sentences on:
+  Pick one or more streams. For each, write 2-4 sentences on:
     - what about this stream interests you (which open question, angle, etc.)
     - your background or prior work
     - what you'd want to work on or contribute
 
   Substance > length. Show your thinking, not a CV.
 
+  If you pick more than one stream, just duplicate the section below.
+
   Example of what a good entry reads like — write your own in the same shape:
 
-    ### Stream C — Model routing
+    ### Model routing
 
     I work on production agent systems and we currently use a static
     model selector — pick GPT-4 for X, Claude for Y. The "live routing
@@ -32,7 +34,7 @@
     rules.
 -->
 
-### Stream <letter> — <stream name>
+### <Stream Name>
 
 <your 2-4 sentences — what interests you about this stream, your background, what you'd want to work on>
 
