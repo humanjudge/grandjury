@@ -18,7 +18,7 @@ If that runs without error, you're good.
 
 ## Sign up and get a token
 
-[Sign up here](https://humanjudge.com/auth?role=builder) (free) and [generate a token](https://humanjudge.com/profile). Then set it in your shell:
+[Sign up here](https://humanjudge.com/auth?role=builder) and [generate a token](https://humanjudge.com/profile). Then set it in your shell:
 
 ```bash
 export GRANDJURY_API_KEY=<your-token>
