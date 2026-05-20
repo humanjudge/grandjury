@@ -48,7 +48,7 @@ Presenting at [Berkeley RDI's Agentic AI Summit, Aug 1–2 2026](https://rdi.ber
 
 Six research streams. Pick by interest, not assignment.
 
-### Stream A — Data representation for training
+### Stream A — Pluralistic data for model training
 
 Preference-optimization methods are mature (binary, pairwise, multi-objective variants) but assume a single label per training example. Pluralistic, multi-reviewer, open-vocabulary feedback doesn't fit that shape cleanly. The open question: how do we represent pluralistic signal as training data without collapsing its diversity? And what aggregation rule across dimensions respects safety constraints — where trade-offs between dimensions are unacceptable?
 
