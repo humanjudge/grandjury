@@ -546,7 +546,8 @@ class GrandJury:
         if not self._auth_key:
             raise RuntimeError(
                 "Authentication required. Set GRANDJURY_TOKEN (recommended) or GRANDJURY_API_KEY.\n"
-                "Get your token at humanjudge.com/profile"
+                "New here? Sign up as a developer (free): https://humanjudge.com/auth?role=builder\n"
+                "Already have an account? Get your token: https://humanjudge.com/profile"
             )
 
     def _resolve_models(self) -> List[Dict[str, Any]]:
