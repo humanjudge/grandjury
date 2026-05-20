@@ -40,6 +40,48 @@ print(f"Pass rate: {df['pass_rate'].mean():.1%}")
 
 **Patent Pending.**
 
+## Research community
+
+Our center of gravity is **post-deployment evaluation**. We treat live evaluation as a **datastream, not a fixed dataset** — capturing pluralistic, multi-user, multi-context feedback continuously, and keeping the signal rich rather than collapsing it to a single score. Anchored at the [Berkeley RDI Agentic AI Summit, Aug 1–2 2026](https://rdi.berkeley.edu/) (confirmed poster presenter spot).
+
+Six research streams. Pick by interest, not assignment.
+
+### Stream A — Data representation for training
+
+Preference-optimization methods are mature (binary, pairwise, multi-objective variants) but assume a single label per training example. Pluralistic, multi-reviewer, open-vocabulary feedback doesn't fit that shape cleanly. The open question: how do we represent pluralistic signal as training data without collapsing its diversity? And what aggregation rule across dimensions respects safety constraints — where trade-offs between dimensions are unacceptable?
+
+### Stream B — Resource curation
+
+A public, opinionated, **actively maintained** index of AI safety and production-evaluation tools, frameworks, and papers. Most existing curated indices in this space rot fast — staleness sets in within months as the field moves and links break. We curate with a deliberate maintenance discipline; adjacent communities amplify and contribute updates. The artifact is the index, but the durable value is keeping it current.
+
+### Stream C — Model routing
+
+Quality-routing systems exist that predict which model best serves a given query. Their training data is typically constructed synthetically or sourced from standardized academic benchmarks. We provide the missing layer: pluralistic, multi-reviewer, domain-tagged production feedback as the substrate for routing decisions. Empathy is the first use case — a subjective dimension where standardized benchmarks underperform.
+
+### Stream D — Real-time guardrails mechanism
+
+How do live production signals drive *immediate* guardrail updates, user apologies, and human handoff for dangerous content — folding continuous red-teaming feedback into the production pipeline rather than batching it for the next retraining cycle? Includes the design question of upstream filtering (centralized blocking at the platform) vs. downstream slicing (user-context-dependent filtering closer to deployment).
+
+### Stream E — Signal representation & visualization
+
+What richer signal can reviewers submit beyond binary verdict + categorical tags, and what does an AI *user* see as a result? The two ends of one pipeline. Input side: pre-defined attribute ratings versus open-vocabulary contextual tags — the schema choice determines what downstream systems can ingest. Output side: live, multi-dimensional, third-party-attested representations of how an AI is actually behaving — beyond static vendor documentation or single-dimensional comparison rankings.
+
+### Stream F — Platform integration
+
+How does live pluralistic evaluation surface inside the tools where developers and workflows already touch AI output? Categories of integration surface: LLM observability platforms, workflow-automation systems, agent IDEs, dashboards, communications and alerting, notebooks, documentation embeds. Each integration ships into its own developer community.
+
+### Apply by opening a PR
+
+No CV, no "tell us about yourself." The application is a small PR with a challenge result + which streams interest you. Five steps:
+
+1. **Sign up** at [humanjudge.com/auth?role=builder](https://humanjudge.com/auth?role=builder) (free) — gets you a PAT and the `builder` role
+2. **Connect GitHub** on [humanjudge.com/profile](https://humanjudge.com/profile) so we can link your PR to your account
+3. **Pick a challenge** from [`/challenges/README.md`](challenges/README.md), run it locally
+4. **Add `/challenges/<your-github-handle>.md`** following [`TEMPLATE.md`](challenges/TEMPLATE.md), open the PR
+5. **Reviewed personally** within ~3 business days → after merge, instructions for joining our Discord arrive via email
+
+Full walkthrough in [`CONTRIBUTING.md`](CONTRIBUTING.md#apply-to-the-rd-community). Privacy: email never appears in the public PR — your GitHub handle is the only public identifier.
+
 ## Why HumanJudge
 
 Most AI evaluation pipelines use LLMs to judge LLMs. That inherits the same biases, conventions, and blind spots as the models being evaluated — and tends to produce eval pipelines with ~0% disagreement, which is the diagnostic for "not measuring quality, just confirming assumptions" ([essay](https://humanjudge.com/ai-reviews/your-eval-pipeline-has-zero-disagreement)).
@@ -223,94 +265,6 @@ gj.analytics.population_confidence(data=None, voter_list=None, ...)
 gj.analytics.majority_good_votes(data=None, ...)
 gj.analytics.votes_distribution(data=None, ...)
 ```
-
-## Research community
-
-Our center of gravity is **post-deployment evaluation**. We treat live evaluation as a **datastream, not a fixed dataset** — capturing pluralistic, multi-user, multi-context feedback continuously, and keeping the signal rich rather than collapsing it to a single score. Anchored at the [Berkeley RDI Agentic AI Summit, Aug 1–2 2026](https://rdi.berkeley.edu/) (confirmed poster presenter spot).
-
-Six research streams below. Pick by interest, not assignment.
-
-### The streams
-
-<details>
-<summary><b>Stream 0 — Applied training bridge</b> · for alignment researchers, preference-optimization specialists, multi-objective RL folks</summary>
-
-The optimizers are solved (KTO, DPO, GRPO, MOPO via [Hugging Face TRL](https://github.com/huggingface/trl)). The **aggregation rule** across multi-dimensional pluralistic signal isn't.
-
-Standard multi-objective RLHF defaults to weighted sum — which lets a model trade dimensions off. We're empirically comparing min / Tchebycheff / constrained / CVaR aggregations on production multi-reviewer data — the kind no other dataset has at scale.
-
-Working name for the deliverable: `grandjury-train`. Thin layer over TRL: data adapters + aggregation experiments + comparison notebooks.
-
-</details>
-
-<details>
-<summary><b>Stream 1 — AI Safety + Evaluation Resource Curation</b> · for community curators, content-marketing-adjacent contributors, knowledge-base builders</summary>
-
-A public, opinionated index of AI safety + production-evaluation tools, frameworks, and papers. Built in public on X/Twitter. We curate, adjacent communities amplify back.
-
-Community/outreach work — the curated index is the artifact.
-
-</details>
-
-<details>
-<summary><b>Stream 2 — Selector mechanism / "Pick The Right Brain"</b> · for ML systems engineers, RAG / dynamic-workflow practitioners, routing specialists</summary>
-
-Given a stream of pluralistic feedback signals, how do we help agent devs pick the right model for their use case? **Empathy** is the first use case — highly subjective, recurring in healthcare / coaching / customer support.
-
-Existing quality routers (NotDiamond, Martian, OpenRouter's auto router) train on synthetic eval datasets they construct themselves. We have the pluralistic, multi-reviewer production data they don't. Working name: `grandjury-router`.
-
-</details>
-
-<details>
-<summary><b>Stream 3 — Public guardrailing from real-time feedback</b> · for safety researchers, content-policy engineers, guardrail tool builders</summary>
-
-How do live production signals drive *immediate* guardrail updates, user apologies, human handoff for dangerous content — without waiting for the next retrain? Includes the "censorship-first vs censorship-via-slicing" design question.
-
-Working name: `grandjury-guardrail`. Runtime rules engine consuming the live stream.
-
-</details>
-
-<details>
-<summary><b>Stream 4 — Pluralistic signal: vocabulary + public artifacts (twin threads)</b> · for schema designers, data architects, HCI / data-viz designers, accountability researchers, policy folks</summary>
-
-Two threads:
-
-**4-A — Input vocabulary.** What richer K/V signal can reviewers submit beyond pass/flag? Fixed K-axis ratings (HelpSteer2-style) vs open-vocabulary K/V tags. The schema we land on directly feeds Stream 0's training experiments. Working name: `grandjury-schema`.
-
-**4-B — Public accountability artifacts.** What does an AI *user* actually see about an AI? Model cards are static and vendor-published. LMSys Arena gives you one-dimensional Elo. What's the live, multi-dimensional, third-party-attested, consumer-readable representation of how an AI is *actually* behaving — built on pluralistic production feedback? Working name: `grandjury-pulse-card`.
-
-</details>
-
-<details>
-<summary><b>Stream 5 — UI integration: HumanJudge signal anywhere</b> · for integration engineers, DX folks, observability insiders, no-code / workflow builders, plugin & bot developers</summary>
-
-The widest stream by surface area. Anywhere a developer or workflow touches AI output is in scope:
-
-- **Observability:** Langfuse, Galileo, Arize Phoenix, LangSmith, Helicone
-- **Workflow / automation:** n8n, Zapier, Make, Pipedream, Activepieces
-- **Agent / IDE platforms:** OpenClaw, Cursor, Continue, Cline, Windmill
-- **Dashboards / BI:** Datadog, Grafana, Metabase, Superset
-- **Dev workflow:** GitHub Actions, Linear, Jira (eval-triggered tasks)
-- **Comms / alerts:** Slack, Discord
-- **Notebooks:** Jupyter, Colab, Observable
-
-Each integration ships into its own discovery channel. Lowest "0 → 1" cost of any stream — Langfuse / Phoenix / LangSmith adapters already exist in the platform code.
-
-</details>
-
-### Apply by opening a PR
-
-No CV, no "tell us about yourself." The application is a small PR with a challenge result + which streams interest you. Five steps:
-
-1. **Sign up** at [humanjudge.com/auth?role=builder](https://humanjudge.com/auth?role=builder) (free) — gets you a PAT and the `builder` role
-2. **Connect GitHub** on [humanjudge.com/profile](https://humanjudge.com/profile) so we can link your PR to your account
-3. **Pick a challenge** from [`/challenges/README.md`](challenges/README.md), run it locally
-4. **Add `/challenges/<your-github-handle>.md`** following [`TEMPLATE.md`](challenges/TEMPLATE.md), open the PR
-5. **Reviewed personally** within ~3 business days → after merge, Discord invite arrives via email
-
-Full walkthrough in [`CONTRIBUTING.md`](CONTRIBUTING.md#apply-to-the-rd-community). Privacy: email never appears in the public PR — your GitHub handle is the only public identifier.
-
-After your PR is merged, you'll receive instructions for joining our Discord, where the stream-level conversations and active research threads live.
 
 ## Contributing
 
