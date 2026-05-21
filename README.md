@@ -40,8 +40,6 @@ df = gj.results()  # traces with human votes — as a DataFrame
 print(f"Pass rate: {df['pass_rate'].mean():.1%}")
 ```
 
-**Patent Pending.**
-
 ## Research community
 
 AI evaluation is usually a single number. We capture it as a continuous **datastream** instead — pluralistic, multi-reviewer, multi-context, from real production traffic. This open R&D community works on what that richer signal can do.
@@ -274,4 +272,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, testing, and PR gu
 
 ## License
 
-See [LICENSE](LICENSE).
+See [LICENSE](LICENSE). Patent application US 63/825,484 covers aspects of the platform.
