@@ -70,7 +70,7 @@ How do live production signals drive *immediate* guardrail updates, user apologi
 
 What richer signal can reviewers submit beyond binary verdict + categorical tags, and what does an AI *user* see as a result? The two ends of one pipeline. Input side: pre-defined attribute ratings versus open-vocabulary contextual tags — the schema choice determines what downstream systems can ingest. Output side: live, multi-dimensional, third-party-attested representations of how an AI is actually behaving — beyond static vendor documentation or single-dimensional comparison rankings.
 
-### Stream F — Platform integration
+### Stream F — Developer workflow
 
 How does live pluralistic evaluation surface inside the tools where developers and workflows already touch AI output? Categories of integration surface: LLM observability platforms, workflow-automation systems, agent IDEs, dashboards, communications and alerting, notebooks, documentation embeds. Each integration ships into its own developer community.
 
