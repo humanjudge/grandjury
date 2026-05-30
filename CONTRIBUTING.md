@@ -15,12 +15,6 @@ The application is a small PR — not a form, not a CV submission. Two steps:
 
 Follow the walkthrough in [`/challenges/README.md`](challenges/README.md). It's one short task — count evaluations in any arena using the SDK. ~15 minutes start to finish. The walkthrough covers installing the SDK, creating an account, generating a token + connecting your GitHub (same profile page — both at once), and running the challenge against an arena of your choice.
 
-Optional but recommended: configure git to use GitHub's noreply email so your real email stays out of the public commit history:
-
-```bash
-git config user.email "<your-github-username>@users.noreply.github.com"
-```
-
 ### 2. Open the PR
 
 Submit a PR that adds `/challenges/<your-github-handle>.md`. Two paths:
