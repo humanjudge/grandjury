@@ -246,6 +246,22 @@ class ArenaResource:
             logger.debug("GrandJury: arena.leaderboard error: %s", exc)
             return ResultSet([])
 
+    def enroll(self, model_id: str, endpoint_config: Optional[Dict] = None) -> Dict[str, Any]:
+        """Enroll a model into this arena. Requires PAT owned by the model owner.
+
+        Returns dict with enrollment_id, model_id, evaluation_id, status."""
+        self._client._require_auth()
+        import requests
+        resp = requests.post(
+            f"{self._client._base_url}/api/v1/models/{model_id}/enroll/{self._evaluation_id}",
+            json={"endpoint_config": endpoint_config},
+            headers={"Authorization": f"Bearer {self._client._auth_key}"},
+            timeout=self._client._timeout,
+        )
+        _handle_response_error(resp, "arena.enroll")
+        resp.raise_for_status()
+        return resp.json()
+
     def models(self):
         """
         List models enrolled in this arena. No auth required.
@@ -370,10 +386,36 @@ class ArenaResource:
 
 
 class _ModelsNamespace:
-    """gj.models.list() / gj.models.get(id)"""
+    """gj.models.create(name) / gj.models.list() / gj.models.get(id)"""
 
     def __init__(self, client: "GrandJury"):
         self._client = client
+
+    def create(
+        self,
+        name: str,
+        description: Optional[str] = None,
+        type: str = "sdk",
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Register a new model with GrandJury. Returns dict with id, name, type,
+        secret_key, publishable_key. Requires a PAT (gj_pat_*)."""
+        self._client._require_auth()
+        import requests
+        payload: Dict[str, Any] = {"name": name, "type": type}
+        if description is not None:
+            payload["description"] = description
+        if metadata is not None:
+            payload["metadata"] = metadata
+        resp = requests.post(
+            f"{self._client._base_url}/api/v1/models",
+            json=payload,
+            headers={"Authorization": f"Bearer {self._client._auth_key}"},
+            timeout=self._client._timeout,
+        )
+        _handle_response_error(resp, "models.create")
+        resp.raise_for_status()
+        return resp.json()
 
     def list(self) -> List[Dict[str, Any]]:
         """List all models owned by the current user (requires secret key)."""

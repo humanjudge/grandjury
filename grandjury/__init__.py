@@ -5,5 +5,5 @@ from .sdk import GrandJury, Span
 # Public alias
 GJClient = GrandJury
 
-__version__ = "2.3.2"
+__version__ = "2.3.3"
 __all__ = ["GJClient", "GrandJury", "Span", "ResultSet", "GrandJuryClient", "evaluate_model"]
