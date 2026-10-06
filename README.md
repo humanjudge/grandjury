@@ -239,7 +239,7 @@ All analytics methods work on both platform data (`gj.results(detail='votes')`) 
 ```python
 gj = GrandJury(
     api_key=None,     # reads GRANDJURY_API_KEY from env if not provided
-    base_url="https://grandjury-server.onrender.com",
+    base_url="https://api.humanjudge.com",
     timeout=5.0,
 )
 

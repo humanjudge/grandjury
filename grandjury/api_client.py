@@ -27,7 +27,7 @@ try:
 except ImportError:
     HAS_MSGSPEC = False
 
-API_BASE_URL = "https://grandjury-server.onrender.com/api/v1"
+API_BASE_URL = "https://api.humanjudge.com/api/v1"
 
 class GrandJuryClient:
     def __init__(self, api_key: Optional[str] = None, base_url: str = API_BASE_URL):

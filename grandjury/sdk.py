@@ -28,7 +28,7 @@ from grandjury.result_set import ResultSet
 logger = logging.getLogger("grandjury")
 
 # Default endpoint — override in constructor for self-hosted
-DEFAULT_BASE_URL = "https://grandjury-server.onrender.com"
+DEFAULT_BASE_URL = "https://api.humanjudge.com"
 
 
 def _handle_response_error(resp, context: str) -> None:
